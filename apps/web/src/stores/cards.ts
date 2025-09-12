@@ -26,5 +26,13 @@ export const useCardsStore = defineStore("cards", {
       await http.patch(`/cards/${id}/archive`);
       await this.fetch(projectId);
     },
+    async setDueDate(cardId: string, projectId: string, input: { start: string; end?: string; allDay?: boolean }) {
+      await http.patch(`/cards/${cardId}/due-date`, input, { headers: { "X-Idempotency-Key": `${cardId}-${input.start}` } });
+      await this.fetch(projectId);
+    },
+    async clearDueDate(cardId: string, projectId: string) {
+      await http.delete(`/cards/${cardId}/due-date`);
+      await this.fetch(projectId);
+    },
   },
 });

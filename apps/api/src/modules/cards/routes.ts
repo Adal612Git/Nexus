@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { PrismaClient, CardStatus } from "@prisma/client";
 import auth from "../auth/middleware.js";
+import { calendarAdapter } from "../calendar/mockAdapter.js";
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -188,5 +189,189 @@ router.patch("/reorder", auth, async (req, res) => {
   const result = await prisma.card.findMany({ where: { projectId }, orderBy: [{ status: "asc" }, { position: "asc" }] });
   return res.json({ success: true, data: result });
 });
+
+// Set or update due date for a card
+const dueDateSchema = z.object({
+  start: z.string().min(1),
+  end: z.string().min(1).optional(),
+  allDay: z.boolean().optional(),
+});
+
+router.patch("/:id/due-date", auth, async (req, res) => {
+  const ownerId = (req as any).userId as string | undefined;
+  const pid = idParam.safeParse(req.params);
+  if (!pid.success) return res.status(400).json({ success: false, error: pid.error.flatten() });
+  const body = dueDateSchema.safeParse(req.body);
+  if (!body.success) return res.status(400).json({ success: false, error: body.error.flatten() });
+
+  const card = await prisma.card.findUnique({ where: { id: pid.data.id }, include: { project: true } });
+  if (!card || card.project.userId !== ownerId) return res.status(404).json({ success: false, error: "Not found" });
+
+  const integ = await prisma.calendarIntegration.findUnique({ where: { userId: ownerId! } });
+  const tz = integ?.timezone || "UTC";
+  const { startUtc, endUtc, allDay } = computeUtcRange(body.data.start, body.data.end, body.data.allDay, tz);
+  const idempotencyKey = String(req.headers["x-idempotency-key"] || `dd-${card.id}-${startUtc.toISOString()}`);
+
+  try {
+    // Upsert local event
+    const existing = await prisma.calendarEvent.findUnique({ where: { cardId: card.id } });
+    const provider = integ?.provider || null;
+    const local = existing
+      ? await prisma.calendarEvent.update({
+          where: { cardId: card.id },
+          data: { startUtc, endUtc, allDay: !!allDay, provider: provider || undefined, status: "Pending" },
+        })
+      : await prisma.calendarEvent.create({
+          data: {
+            cardId: card.id,
+            startUtc,
+            endUtc,
+            allDay: !!allDay,
+            provider: provider || undefined,
+            status: integ ? "Pending" : "Synced",
+          },
+        });
+
+    // Trigger sync if integration exists
+    if (integ) {
+      await syncCalendar(ownerId!, integ.provider, {
+        action: existing ? "update" : "create",
+        accountEmail: integ.accountEmail,
+        calendarId: integ.defaultCalendarId,
+        event: {
+          id: local.externalId || undefined,
+          accountEmail: integ.accountEmail,
+          title: card.title,
+          startsAt: startUtc.toISOString(),
+          endsAt: endUtc.toISOString(),
+          calendarId: integ.defaultCalendarId,
+        },
+        idempotencyKey,
+        cardId: card.id,
+      });
+    }
+
+    req.log.info({ msg: "due-date.set", card: anon(card.id) });
+    return res.json({ success: true });
+  } catch (e: any) {
+    req.log.error({ msg: "due-date.set.error", card: anon(card.id) });
+    return res.status(400).json({ success: false, error: e?.code || "Due date failed" });
+  }
+});
+
+router.delete("/:id/due-date", auth, async (req, res) => {
+  const ownerId = (req as any).userId as string | undefined;
+  const pid = idParam.safeParse(req.params);
+  if (!pid.success) return res.status(400).json({ success: false, error: pid.error.flatten() });
+  const card = await prisma.card.findUnique({ where: { id: pid.data.id }, include: { project: true } });
+  if (!card || card.project.userId !== ownerId) return res.status(404).json({ success: false, error: "Not found" });
+
+  const integ = await prisma.calendarIntegration.findUnique({ where: { userId: ownerId! } });
+  const ev = await prisma.calendarEvent.findUnique({ where: { cardId: card.id } });
+  if (!ev) return res.status(204).send();
+  try {
+    await prisma.calendarEvent.delete({ where: { cardId: card.id } });
+    if (integ && ev.externalId) {
+      await calendarAdapter.delete({ id: ev.externalId, accountEmail: integ.accountEmail });
+    }
+    req.log.info({ msg: "due-date.delete", card: anon(card.id) });
+    return res.status(204).send();
+  } catch (e: any) {
+    req.log.error({ msg: "due-date.delete.error", card: anon(card.id) });
+    return res.status(400).json({ success: false, error: e?.code || "Delete failed" });
+  }
+});
+
+router.get("/:id/event", auth, async (req, res) => {
+  const ownerId = (req as any).userId as string | undefined;
+  const pid = idParam.safeParse(req.params);
+  if (!pid.success) return res.status(400).json({ success: false, error: pid.error.flatten() });
+  const card = await prisma.card.findUnique({ where: { id: pid.data.id }, include: { project: true } });
+  if (!card || card.project.userId !== ownerId) return res.status(404).json({ success: false, error: "Not found" });
+  const ev = await prisma.calendarEvent.findUnique({ where: { cardId: card.id } });
+  return res.json({ success: true, data: ev });
+});
+
+function computeUtcRange(start: string, end: string | undefined, allDay: boolean | undefined, tz: string) {
+  // Basic normalization: if start/end include timezone or Z, rely on Date parsing; otherwise treat as UTC
+  const hasTZ = /[zZ]|[\+\-]\d{2}:?\d{2}$/.test(start);
+  const s = new Date(hasTZ ? start : start + (start.endsWith("Z") ? "" : "Z"));
+  let e: Date;
+  if (end) {
+    const hasEndTZ = /[zZ]|[\+\-]\d{2}:?\d{2}$/.test(end);
+    e = new Date(hasEndTZ ? end : end + (end.endsWith("Z") ? "" : "Z"));
+  } else {
+    e = new Date(s.getTime() + 60 * 60 * 1000);
+  }
+  // allDay: normalize to full-day range
+  if (allDay) {
+    const sDay = new Date(Date.UTC(s.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate(), 0, 0, 0));
+    const eDay = new Date(sDay.getTime() + 24 * 60 * 60 * 1000);
+    return { startUtc: sDay, endUtc: eDay, allDay: true };
+  }
+  return { startUtc: s, endUtc: e, allDay: false };
+}
+
+async function syncCalendar(
+  userId: string,
+  provider: any,
+  opts: {
+    action: "create" | "update";
+    accountEmail: string;
+    calendarId: string;
+    event: { id?: string; accountEmail: string; title: string; startsAt: string; endsAt: string; calendarId: string };
+    idempotencyKey: string;
+    cardId: string;
+  }
+) {
+  const maxRetries = 3;
+  let attempt = 0;
+  while (attempt <= maxRetries) {
+    try {
+      const res = opts.action === "create" ? await calendarAdapter.create({
+        id: opts.event.id,
+        accountEmail: opts.accountEmail,
+        title: opts.event.title,
+        startsAt: opts.event.startsAt,
+        endsAt: opts.event.endsAt,
+        calendarId: opts.calendarId,
+      }) : await calendarAdapter.update({
+        id: opts.event.id,
+        accountEmail: opts.accountEmail,
+        title: opts.event.title,
+        startsAt: opts.event.startsAt,
+        endsAt: opts.event.endsAt,
+        calendarId: opts.calendarId,
+      });
+      if (res.status === "Synced") {
+        await prisma.calendarEvent.update({ where: { cardId: opts.cardId }, data: { status: "Synced", lastSyncedAt: new Date(), externalId: (res as any).data?.id } });
+        return;
+      }
+      if (res.status === "Pending") {
+        await prisma.calendarEvent.update({ where: { cardId: opts.cardId }, data: { status: "Pending" } });
+        return;
+      }
+      throw new Error(res.error || "Sync error");
+    } catch (e: any) {
+      const status = e?.response?.status;
+      if (status === 401) {
+        await prisma.calendarEvent.update({ where: { cardId: opts.cardId }, data: { status: "Pending" } });
+        return;
+      }
+      if (status === 429 || status === 503) {
+        const backoff = Math.pow(2, attempt) * 250;
+        await new Promise((r) => setTimeout(r, backoff));
+        attempt += 1;
+        continue;
+      }
+      await prisma.calendarEvent.update({ where: { cardId: opts.cardId }, data: { status: "Error" } });
+      return;
+    }
+  }
+}
+
+function anon(id: string) {
+  return `c_${id.slice(0, 3)}...${id.slice(-3)}`;
+}
 
 export default router;

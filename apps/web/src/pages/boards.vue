@@ -154,6 +154,21 @@ function onDraggableChange(evt?: any) {
     }
   }, 50);
 }
+
+function promptDue(card: any) {
+  const start = window.prompt("Fecha inicio (ISO, e.g. 2025-09-13T10:00:00Z)", new Date().toISOString().slice(0, 16));
+  if (!start) return;
+  const allDay = false;
+  const pid = currentProjectId.value;
+  if (!pid) return;
+  cards.setDueDate(card.id, pid, { start: start.includes("Z") ? start : start + "Z", allDay }).catch(() => alert("No se pudo asignar la fecha"));
+}
+
+function clearDue(card: any) {
+  const pid = currentProjectId.value;
+  if (!pid) return;
+  cards.clearDueDate(card.id, pid).catch(() => alert("No se pudo quitar la fecha"));
+}
 </script>
 
 <template>
@@ -173,6 +188,10 @@ function onDraggableChange(evt?: any) {
           <div v-for="element in todoList" :key="element.id" :data-id="element.id" style="margin:8px;background:#fafafa;border:1px solid #eee;border-radius:6px;padding:8px;">
             <div style="font-weight:600;">{{ element.title }}</div>
             <div style="font-size:12px;color:#666;">pos {{ element.position }}</div>
+            <div style="display:flex;gap:6px;margin-top:6px;">
+              <button @click="() => promptDue(element)" style="font-size:12px;padding:2px 6px;border:1px solid #ddd;border-radius:4px;background:#fff;">Fecha</button>
+              <button @click="() => clearDue(element)" style="font-size:12px;padding:2px 6px;border:1px solid #ddd;border-radius:4px;background:#fff;">Quitar</button>
+            </div>
           </div>
           <template #footer>
             <div v-if="!todoList?.length" style="color:#999;font-size:12px;padding:8px;">Sin cards</div>
@@ -185,6 +204,10 @@ function onDraggableChange(evt?: any) {
           <div v-for="element in doingList" :key="element.id" :data-id="element.id" style="margin:8px;background:#fafafa;border:1px solid #eee;border-radius:6px;padding:8px;">
             <div style="font-weight:600;">{{ element.title }}</div>
             <div style="font-size:12px;color:#666;">pos {{ element.position }}</div>
+            <div style="display:flex;gap:6px;margin-top:6px;">
+              <button @click="() => promptDue(element)" style="font-size:12px;padding:2px 6px;border:1px solid #ddd;border-radius:4px;background:#fff;">Fecha</button>
+              <button @click="() => clearDue(element)" style="font-size:12px;padding:2px 6px;border:1px solid #ddd;border-radius:4px;background:#fff;">Quitar</button>
+            </div>
           </div>
           <template #footer>
             <div v-if="!doingList?.length" style="color:#999;font-size:12px;padding:8px;">Sin cards</div>
@@ -197,6 +220,10 @@ function onDraggableChange(evt?: any) {
           <div v-for="element in doneList" :key="element.id" :data-id="element.id" style="margin:8px;background:#fafafa;border:1px solid #eee;border-radius:6px;padding:8px;">
             <div style="font-weight:600;">{{ element.title }}</div>
             <div style="font-size:12px;color:#666;">pos {{ element.position }}</div>
+            <div style="display:flex;gap:6px;margin-top:6px;">
+              <button @click="() => promptDue(element)" style="font-size:12px;padding:2px 6px;border:1px solid #ddd;border-radius:4px;background:#fff;">Fecha</button>
+              <button @click="() => clearDue(element)" style="font-size:12px;padding:2px 6px;border:1px solid #ddd;border-radius:4px;background:#fff;">Quitar</button>
+            </div>
           </div>
           <template #footer>
             <div v-if="!doneList?.length" style="color:#999;font-size:12px;padding:8px;">Sin cards</div>
@@ -209,6 +236,10 @@ function onDraggableChange(evt?: any) {
           <div v-for="element in archivedList" :key="element.id" :data-id="element.id" style="margin:8px;background:#fafafa;border:1px solid #eee;border-radius:6px;padding:8px;">
             <div style="font-weight:600;">{{ element.title }}</div>
             <div style="font-size:12px;color:#666;">pos {{ element.position }}</div>
+            <div style="display:flex;gap:6px;margin-top:6px;">
+              <button @click="() => promptDue(element)" style="font-size:12px;padding:2px 6px;border:1px solid #ddd;border-radius:4px;background:#fff;">Fecha</button>
+              <button @click="() => clearDue(element)" style="font-size:12px;padding:2px 6px;border:1px solid #ddd;border-radius:4px;background:#fff;">Quitar</button>
+            </div>
           </div>
           <template #footer>
             <div v-if="!archivedList?.length" style="color:#999;font-size:12px;padding:8px;">Sin cards</div>
