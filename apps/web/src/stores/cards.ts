@@ -4,14 +4,14 @@ import http from "../lib/http";
 export interface Card { id: string; title: string; status: string; position: number; projectId: string }
 
 export const useCardsStore = defineStore("cards", {
-  state: () => ({ byProject: new Map<string, Card[]>() }),
+  state: () => ({ byProject: {} as Record<string, Card[]> }),
   getters: {
-    listByProject: (s) => (projectId: string) => s.byProject.get(projectId) || [],
+    listByProject: (s) => (projectId: string) => s.byProject[projectId] || [],
   },
   actions: {
     async fetch(projectId: string) {
       const res = await http.get(`/cards`, { params: { projectId } });
-      this.byProject.set(projectId, res.data.data || []);
+      this.byProject[projectId] = res.data.data || [];
     },
     async create(input: { projectId: string; title: string; status: string; position: number }) {
       const res = await http.post(`/cards`, input);
@@ -28,4 +28,3 @@ export const useCardsStore = defineStore("cards", {
     },
   },
 });
-
