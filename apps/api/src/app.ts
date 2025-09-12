@@ -3,6 +3,8 @@ import pino from "pino";
 import pinoHttp from "pino-http";
 import authRouter from "./modules/auth/routes.js";
 import boardsRouter from "./routes/boards.js";
+import projectsRouter from "./modules/projects/routes.js";
+import cardsRouter from "./modules/cards/routes.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL || "info" });
 
@@ -17,9 +19,10 @@ export function createApp() {
 
   app.use("/auth", authRouter);
   app.use("/boards", boardsRouter);
+  app.use("/projects", projectsRouter);
+  app.use("/cards", cardsRouter);
 
   return app;
 }
 
 export default createApp;
-

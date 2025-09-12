@@ -15,6 +15,8 @@ export const useAuthStore = defineStore("auth", {
   actions: {
     async init() {
       if (this.initialized) return;
+      const at = localStorage.getItem("accessToken");
+      if (at) this.accessToken = at;
       const rt = localStorage.getItem("refreshToken");
       if (rt) {
         try {
@@ -29,17 +31,20 @@ export const useAuthStore = defineStore("auth", {
       const res = await axios.post<Tokens>("/auth/refresh", { refreshToken });
       this.accessToken = res.data.accessToken;
       this.refreshToken = res.data.refreshToken;
+      localStorage.setItem("accessToken", this.accessToken);
       localStorage.setItem("refreshToken", this.refreshToken);
     },
     async login(email: string, password: string, remember: boolean) {
       const res = await axios.post<Tokens>("/auth/login", { email, password });
       this.accessToken = res.data.accessToken;
       this.refreshToken = res.data.refreshToken;
+      localStorage.setItem("accessToken", this.accessToken);
       if (remember) localStorage.setItem("refreshToken", this.refreshToken);
     },
     async logout() {
       this.accessToken = "";
       this.refreshToken = "";
+      localStorage.removeItem("accessToken");
       localStorage.removeItem("refreshToken");
     },
     authHeader() {
