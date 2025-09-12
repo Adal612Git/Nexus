@@ -1,0 +1,37 @@
+# Node
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Build
+**/dist
+**/.output
+
+# Quasar
+.quasar
+.sourcemaps
+
+# Prisma / SQLite
+prisma/**/migrations/**/.DS_Store
+**/*.db
+**/*.db-journal
+
+# Playwright
+playwright-report
+playwright/.cache
+.test-results
+
+# Misc
+.DS_Store
+.idea
+.vscode/*
+!.vscode/extensions.json
+coverage
+
