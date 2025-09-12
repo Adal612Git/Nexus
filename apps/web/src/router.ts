@@ -15,6 +15,12 @@ const router = createRouter({
     { path: "/reset-password", name: "reset", component: Reset },
     { path: "/dashboard", name: "dashboard", component: Dashboard, meta: { requiresAuth: true } },
     { path: "/boards", name: "boards", component: Boards, meta: { requiresAuth: true } },
+    {
+      path: "/settings/integrations",
+      name: "integrations",
+      component: () => import("./pages/settings/integrations.vue"),
+      meta: { requiresAuth: true },
+    },
   ],
 });
 

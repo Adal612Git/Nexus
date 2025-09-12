@@ -8,6 +8,7 @@
         <router-link to="/login">Login</router-link>
         <router-link to="/dashboard">Dashboard</router-link>
         <router-link to="/boards">Boards</router-link>
+        <router-link to="/settings/integrations">Integraciones</router-link>
       </nav>
     </header>
     <router-view />
