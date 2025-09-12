@@ -2,15 +2,18 @@
 
 <template>
   <main style="padding:2rem;font-family:system-ui, sans-serif;">
-    <h1>Nexus Web</h1>
-    <p>Vite + Vue 3 listo. Integra Quasar cuando quieras.</p>
-    <p>
-      API health: <code><a href="http://localhost:3000/health" target="_blank">/health</a></code>
-    </p>
+    <header style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+      <h1>Nexus Web</h1>
+      <nav style="display:flex;gap:12px">
+        <router-link to="/login">Login</router-link>
+        <router-link to="/dashboard">Dashboard</router-link>
+        <router-link to="/boards">Boards</router-link>
+      </nav>
+    </header>
+    <router-view />
   </main>
-  </template>
+</template>
 
 <style scoped>
-main { max-width: 720px; margin: 0 auto; }
+main { max-width: 820px; margin: 0 auto; }
 </style>
-

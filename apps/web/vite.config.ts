@@ -10,8 +10,15 @@ export default defineConfig(({ mode }) => {
     plugins: [vue()],
     server: {
       host,
-      port
+      port,
+      proxy: {
+        "/auth": { target: `http://localhost:${process.env.API_PORT || 3000}`, changeOrigin: true },
+        "/api": {
+          target: `http://localhost:${process.env.API_PORT || 3000}`,
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api/, ""),
+        },
+      },
     }
   };
 });
-

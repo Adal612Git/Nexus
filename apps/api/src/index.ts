@@ -1,16 +1,11 @@
 import "dotenv/config";
-import express from "express";
+import { createApp } from "./app.js";
 
-const app = express();
-app.use(express.json());
-
-app.get("/health", (_req, res) => {
-  res.json({ ok: true, service: "api", ts: new Date().toISOString() });
-});
+const app = createApp();
 
 const host = process.env.API_HOST || "0.0.0.0";
 const port = Number(process.env.API_PORT || 3000);
 app.listen(port, host, () => {
+  // eslint-disable-next-line no-console
   console.log(`[api] listening on http://${host}:${port}`);
 });
-

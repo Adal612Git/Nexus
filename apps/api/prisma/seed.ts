@@ -1,4 +1,5 @@
 import { PrismaClient, CardStatus } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
@@ -7,12 +8,16 @@ async function main() {
   await prisma.calendarEvent.deleteMany({});
   await prisma.card.deleteMany({});
   await prisma.project.deleteMany({});
+  await prisma.refreshToken.deleteMany({});
+  await prisma.passwordReset.deleteMany({});
   await prisma.user.deleteMany({ where: { email: "demo@nexus.dev" } });
 
+  const passwordHash = await bcrypt.hash("password123", 10);
   const user = await prisma.user.create({
     data: {
       email: "demo@nexus.dev",
       name: "Demo User",
+      passwordHash,
     },
   });
 
@@ -55,4 +60,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-

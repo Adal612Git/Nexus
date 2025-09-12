@@ -21,7 +21,7 @@ module.exports = {
     "**/dist/**",
     "**/.quasar/**",
     "**/playwright-report/**",
-    "**/test-results/**"
+    "**/test-results/**",
+    "apps/api/src/generated/**"
   ]
 };
-

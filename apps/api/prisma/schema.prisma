@@ -24,8 +24,12 @@ enum Provider {
 model User {
   id        String    @id @default(cuid())
   email     String    @unique
+  passwordHash String
+  failedAttempts Int   @default(0)
+  lockedUntil   DateTime?
   name      String?
   projects  Project[]
+  refreshTokens RefreshToken[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 }
@@ -66,3 +70,22 @@ model CalendarEvent {
   updatedAt DateTime  @updatedAt
 }
 
+model RefreshToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  revokedAt DateTime?
+}
+
+model PasswordReset {
+  id        String   @id @default(cuid())
+  email     String
+  tokenHash String   @unique
+  used      Boolean  @default(false)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+}
