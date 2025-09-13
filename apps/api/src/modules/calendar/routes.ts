@@ -65,4 +65,90 @@ function anonymize(id?: string) {
 }
 
 export default router;
+ 
+// List calendar events within a range, optional filters
+router.get("/calendar/events", auth, async (req, res) => {
+  const userId = (req as any).userId as string | undefined;
+  const querySchema = z.object({
+    from: z.string().datetime(),
+    to: z.string().datetime(),
+    boardId: z.string().min(1).optional(),
+    status: z.enum(["TODO", "DOING", "DONE", "ARCHIVED"]).optional(),
+    label: z.string().optional(),
+  });
+  const parsed = querySchema.safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ success: false, error: parsed.error.flatten() });
+  const { from, to, boardId, status } = parsed.data;
+  // labels not modeled yet; kept for future
 
+  const integ = await prisma.calendarIntegration.findUnique({ where: { userId: userId! } });
+  const tz = integ?.timezone || null;
+
+  // Fetch events joined with cards and projects owned by user
+  const events = await prisma.calendarEvent.findMany({
+    where: {
+      startUtc: { gte: new Date(from) },
+      endUtc: { lte: new Date(to) },
+      card: {
+        project: { userId: userId! },
+        ...(status ? { status } : {}),
+        ...(boardId ? { projectId: boardId } : {}),
+      },
+    },
+    include: { card: { include: { project: true } } },
+    orderBy: [{ startUtc: "asc" }],
+  });
+
+  function tzParts(date: Date, timeZone: string) {
+    const dtf = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+    const parts = dtf.formatToParts(date);
+    const map: any = {};
+    for (const p of parts) if (p.type !== "literal") map[p.type] = parseInt(p.value, 10);
+    // Build offset
+    const asUTC = Date.UTC(map.year, map.month - 1, map.day, map.hour, map.minute, map.second);
+    const offsetMs = asUTC - date.getTime();
+    const sign = offsetMs <= 0 ? "-" : "+";
+    const abs = Math.abs(offsetMs);
+    const oh = Math.floor(abs / 3600000)
+      .toString()
+      .padStart(2, "0");
+    const om = Math.floor((abs % 3600000) / 60000)
+      .toString()
+      .padStart(2, "0");
+    const yyyy = map.year.toString().padStart(4, "0");
+    const mm = map.month.toString().padStart(2, "0");
+    const dd = map.day.toString().padStart(2, "0");
+    const hh = map.hour.toString().padStart(2, "0");
+    const mi = map.minute.toString().padStart(2, "0");
+    const ss = map.second.toString().padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}T${hh}:${mi}:${ss}${sign}${oh}:${om}`;
+  }
+
+  const data = events.map((ev) => {
+    const startISO = tz ? tzParts(ev.startUtc, tz) : ev.startUtc.toISOString();
+    const endISO = tz ? tzParts(ev.endUtc, tz) : ev.endUtc.toISOString();
+    return {
+      eventId: ev.id,
+      cardId: ev.cardId,
+      title: ev.card.title,
+      status: ev.card.status,
+      boardId: ev.card.projectId,
+      start: startISO,
+      end: endISO,
+      allDay: !!ev.allDay,
+      syncStatus: ev.status,
+    };
+  });
+
+  req.log.info({ msg: "calendar.events", user: anonymize(userId) });
+  return res.json({ success: true, data });
+});

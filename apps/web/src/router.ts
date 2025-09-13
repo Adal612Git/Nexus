@@ -4,6 +4,7 @@ import Forgot from "./pages/forgot-password.vue";
 import Reset from "./pages/reset-password.vue";
 import Dashboard from "./pages/dashboard.vue";
 import Boards from "./pages/boards.vue";
+import Calendar from "./pages/calendar.vue";
 import { useAuthStore } from "./stores/auth";
 
 const router = createRouter({
@@ -15,6 +16,7 @@ const router = createRouter({
     { path: "/reset-password", name: "reset", component: Reset },
     { path: "/dashboard", name: "dashboard", component: Dashboard, meta: { requiresAuth: true } },
     { path: "/boards", name: "boards", component: Boards, meta: { requiresAuth: true } },
+    { path: "/calendar", name: "calendar", component: Calendar, meta: { requiresAuth: true } },
     {
       path: "/settings/integrations",
       name: "integrations",
