@@ -1,5 +1,7 @@
 # Nexus Monorepo
 
+![API Coverage](apps/api/coverage/badge.svg) ![Web Coverage](apps/web/coverage/badge.svg)
+
 Monorepo con **apps/api** (Express + TS) y **apps/web** (Vite + Vue 3). Preparado para integrar **Quasar** más adelante.
 
 ## Requisitos
@@ -44,6 +46,7 @@ pnpm run format
 ```bash
 pnpm run build
 pnpm run test
+pnpm run coverage:api && pnpm run coverage:web && pnpm run coverage:badges
 pnpm run e2e
 ```
 
@@ -73,6 +76,11 @@ pnpm run e2e
 ```
 
 El seed crea `demo@nexus.dev / password123` y datos de ejemplo. Los tests E2E utilizan esas credenciales.
+
+## Quality & Traceability
+
+- Coverage thresholds: API ≥85%, Web ≥70%.
+- Traceability matrix: see `docs/traceability.md`.
 
 ## Notas
 

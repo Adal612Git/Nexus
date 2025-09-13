@@ -1,4 +1,4 @@
-import { PrismaClient, CardStatus } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
@@ -29,11 +29,11 @@ async function main() {
   });
 
   // Create 12 cards: 3 for each status
-  const statuses: CardStatus[] = [
-    CardStatus.TODO,
-    CardStatus.DOING,
-    CardStatus.DONE,
-    CardStatus.ARCHIVED,
+  const statuses: string[] = [
+    "TODO",
+    "DOING",
+    "DONE",
+    "ARCHIVED",
   ];
 
   for (const status of statuses) {

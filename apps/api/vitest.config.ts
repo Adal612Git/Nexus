@@ -20,4 +20,20 @@ export default defineConfig({
     // Ensure we migrate before tests
     globalSetup: ["./tests/globalSetup.ts"],
   },
+  coverage: {
+    provider: "v8",
+    reportsDirectory: "./coverage",
+    reporter: ["text", "html", "json-summary"],
+    lines: 85,
+    functions: 85,
+    statements: 85,
+    branches: 70,
+    include: ["src/**/*.ts"],
+    exclude: [
+      "tests/**",
+      "**/*.test.ts",
+      "src/generated/**",
+      "node_modules/.prisma/**",
+    ],
+  },
 });

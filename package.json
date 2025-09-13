@@ -12,6 +12,9 @@
     "web": "pnpm --filter @nexus/web dev",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
+    "coverage:api": "pnpm --filter @nexus/api test -- --coverage",
+    "coverage:web": "pnpm --filter @nexus/web test -- --coverage",
+    "coverage:badges": "node scripts/gen-coverage-badge.mjs apps/api apps/web",
     "e2e": "playwright test",
     "lint": "eslint . --ext .ts,.js,.vue",
     "format": "prettier -w ."
@@ -20,6 +23,7 @@
     "@playwright/test": "^1.47.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
+    "@vitest/coverage-v8": "2.1.9",
     "concurrently": "^9.0.0",
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",

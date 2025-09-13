@@ -16,6 +16,17 @@ function migrate() {
   execSync("npx prisma migrate deploy", { stdio: "inherit" });
 }
 
+function generateClient() {
+  ensureEnv();
+  try {
+    execSync("pnpm --filter @nexus/api exec prisma generate", { stdio: "inherit" });
+  } catch {
+    try {
+      execSync("npx prisma generate", { stdio: "inherit" });
+    } catch {}
+  }
+}
+
 async function truncateAll() {
   await prisma.$transaction([
     prisma.calendarEvent.deleteMany({}),
@@ -29,6 +40,7 @@ async function truncateAll() {
 
 beforeAll(async () => {
   ensureEnv();
+  generateClient();
   migrate();
   await prisma.$connect();
 });
