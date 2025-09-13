@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import axios from "axios";
+import http from "../lib/http";
 
 type Tokens = { accessToken: string; refreshToken: string };
 
@@ -28,14 +28,14 @@ export const useAuthStore = defineStore("auth", {
       this.initialized = true;
     },
     async refresh(refreshToken: string) {
-      const res = await axios.post<Tokens>("/auth/refresh", { refreshToken });
+      const res = await http.post<Tokens>("/auth/refresh", { refreshToken });
       this.accessToken = res.data.accessToken;
       this.refreshToken = res.data.refreshToken;
       localStorage.setItem("accessToken", this.accessToken);
       localStorage.setItem("refreshToken", this.refreshToken);
     },
     async login(email: string, password: string, remember: boolean) {
-      const res = await axios.post<Tokens>("/auth/login", { email, password });
+      const res = await http.post<Tokens>("/auth/login", { email, password });
       this.accessToken = res.data.accessToken;
       this.refreshToken = res.data.refreshToken;
       localStorage.setItem("accessToken", this.accessToken);

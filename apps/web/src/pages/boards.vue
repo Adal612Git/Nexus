@@ -4,6 +4,7 @@ import { useProjectsStore } from "../stores/projects";
 import { useCardsStore } from "../stores/cards";
 import { VueDraggableNext as Draggable } from "vue-draggable-next";
 import http from "../lib/http";
+import CardDueDateChip from "../components/CardDueDateChip.vue";
 
 const projects = useProjectsStore();
 const cards = useCardsStore();
@@ -15,6 +16,9 @@ const todoList = ref<any[]>([]);
 const doingList = ref<any[]>([]);
 const doneList = ref<any[]>([]);
 const archivedList = ref<any[]>([]);
+const eventsByCard = ref<Record<string, { startUtc: string; allDay?: boolean; status?: string } | null>>({});
+const selected = ref<Set<string>>(new Set());
+const bulkInput = ref("");
 
 function syncColumnsFromStore(projectId: string) {
   const list = cards.listByProject(projectId);
@@ -27,12 +31,35 @@ function syncColumnsFromStore(projectId: string) {
   archivedList.value = byStatus.ARCHIVED;
 }
 
+async function loadEventsForProject(projectId: string) {
+  const list = cards.listByProject(projectId);
+  const entries = await Promise.allSettled(
+    list.map(async (c: any) => {
+      try {
+        const res = await http.get(`/cards/${c.id}/event`);
+        return [c.id, res.data?.data || null] as const;
+      } catch {
+        return [c.id, null] as const;
+      }
+    })
+  );
+  const map: Record<string, any> = {};
+  for (const r of entries) {
+    if (r.status === "fulfilled") {
+      const [id, val] = r.value;
+      map[id] = val ? { startUtc: val.startUtc, allDay: val.allDay, status: val.status } : null;
+    }
+  }
+  eventsByCard.value = map;
+}
+
 onMounted(async () => {
   await projects.fetch();
   if (projects.list.length) {
     currentProjectId.value = projects.list[0].id;
     await cards.fetch(currentProjectId.value);
     syncColumnsFromStore(currentProjectId.value);
+    await loadEventsForProject(currentProjectId.value);
     const pid = currentProjectId.value;
     const list = cards.listByProject(pid);
     console.debug("[boards] pid:", pid);
@@ -53,6 +80,7 @@ async function selectProject(id: string) {
   currentProjectId.value = id;
   await cards.fetch(id);
   syncColumnsFromStore(id);
+  await loadEventsForProject(id);
 }
 
 // Optimistic reorder handler
@@ -169,6 +197,33 @@ function clearDue(card: any) {
   if (!pid) return;
   cards.clearDueDate(card.id, pid).catch(() => alert("No se pudo quitar la fecha"));
 }
+
+function toggleSel(id: string, on: boolean) {
+  if (on) selected.value.add(id);
+  else selected.value.delete(id);
+}
+
+function toIsoFromLocal(val: string) {
+  const d = new Date(val);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString();
+}
+
+async function assignBulk() {
+  if (!bulkInput.value || !currentProjectId.value || selected.value.size === 0) return;
+  const iso = toIsoFromLocal(bulkInput.value);
+  const ids = Array.from(selected.value);
+  // optimistic pending
+  for (const id of ids) eventsByCard.value[id] = { startUtc: iso, status: "Pending" } as any;
+  await Promise.allSettled(ids.map((id) => cards.setDueDate(id, currentProjectId.value!, { start: iso })));
+  await loadEventsForProject(currentProjectId.value);
+}
+
+async function clearBulk() {
+  if (!currentProjectId.value || selected.value.size === 0) return;
+  const ids = Array.from(selected.value);
+  await Promise.allSettled(ids.map((id) => cards.clearDueDate(id, currentProjectId.value!)));
+  await loadEventsForProject(currentProjectId.value);
+}
 </script>
 
 <template>
@@ -181,17 +236,23 @@ function clearDue(card: any) {
       </select>
     </div>
     <div v-if="!currentProjectId">Crea un proyecto para empezar.</div>
-    <div v-else style="display:grid;grid-template-columns: repeat(4, 1fr); gap: 12px;">
+    <div v-else>
+      <div v-if="selected.size" style="margin-bottom:12px;padding:8px;border:1px solid #ddd;border-radius:8px;display:flex;gap:8px;align-items:center;">
+        <div>{{ selected.size }} seleccionadas</div>
+        <input type="datetime-local" v-model="bulkInput" style="border:1px solid #ccc;border-radius:6px;padding:4px 6px;" />
+        <button @click="assignBulk" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;">Asignar fecha</button>
+        <button @click="clearBulk" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;">Quitar fecha</button>
+        <button @click="() => selected.clear()" style="margin-left:auto;padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;">Limpiar selección</button>
+      </div>
+      <div style="display:grid;grid-template-columns: repeat(4, 1fr); gap: 12px;">
       <section style="border:1px solid #ddd;border-radius:8px;min-height:200px;">
         <header style="padding:8px 10px;border-bottom:1px solid #eee;font-weight:600;">To Do ({{ todoList?.length || 0 }})</header>
         <Draggable v-model="todoList" item-key="id" group="cards" tag="div" @change="onDraggableChange">
           <div v-for="element in todoList" :key="element.id" :data-id="element.id" style="margin:8px;background:#fafafa;border:1px solid #eee;border-radius:6px;padding:8px;">
+            <label style="display:flex;align-items:center;gap:6px;margin-bottom:6px;"><input type="checkbox" :checked="selected.has(element.id)" @change="(e:any)=>toggleSel(element.id, e.target.checked)" /> Seleccionar</label>
             <div style="font-weight:600;">{{ element.title }}</div>
             <div style="font-size:12px;color:#666;">pos {{ element.position }}</div>
-            <div style="display:flex;gap:6px;margin-top:6px;">
-              <button @click="() => promptDue(element)" style="font-size:12px;padding:2px 6px;border:1px solid #ddd;border-radius:4px;background:#fff;">Fecha</button>
-              <button @click="() => clearDue(element)" style="font-size:12px;padding:2px 6px;border:1px solid #ddd;border-radius:4px;background:#fff;">Quitar</button>
-            </div>
+            <CardDueDateChip :card-id="element.id" :project-id="currentProjectId" :current-date="eventsByCard[element.id]?.startUtc" :status="eventsByCard[element.id]?.status" :all-day="eventsByCard[element.id]?.allDay" @updated="(p:any)=> (eventsByCard[element.id]= p.startUtc? { startUtc: p.startUtc, allDay: p.allDay, status: p.status }: null)" />
           </div>
           <template #footer>
             <div v-if="!todoList?.length" style="color:#999;font-size:12px;padding:8px;">Sin cards</div>
@@ -202,12 +263,10 @@ function clearDue(card: any) {
         <header style="padding:8px 10px;border-bottom:1px solid #eee;font-weight:600;">Doing ({{ doingList?.length || 0 }})</header>
         <Draggable v-model="doingList" item-key="id" group="cards" tag="div" @change="onDraggableChange">
           <div v-for="element in doingList" :key="element.id" :data-id="element.id" style="margin:8px;background:#fafafa;border:1px solid #eee;border-radius:6px;padding:8px;">
+            <label style="display:flex;align-items:center;gap:6px;margin-bottom:6px;"><input type="checkbox" :checked="selected.has(element.id)" @change="(e:any)=>toggleSel(element.id, e.target.checked)" /> Seleccionar</label>
             <div style="font-weight:600;">{{ element.title }}</div>
             <div style="font-size:12px;color:#666;">pos {{ element.position }}</div>
-            <div style="display:flex;gap:6px;margin-top:6px;">
-              <button @click="() => promptDue(element)" style="font-size:12px;padding:2px 6px;border:1px solid #ddd;border-radius:4px;background:#fff;">Fecha</button>
-              <button @click="() => clearDue(element)" style="font-size:12px;padding:2px 6px;border:1px solid #ddd;border-radius:4px;background:#fff;">Quitar</button>
-            </div>
+            <CardDueDateChip :card-id="element.id" :project-id="currentProjectId" :current-date="eventsByCard[element.id]?.startUtc" :status="eventsByCard[element.id]?.status" :all-day="eventsByCard[element.id]?.allDay" @updated="(p:any)=> (eventsByCard[element.id]= p.startUtc? { startUtc: p.startUtc, allDay: p.allDay, status: p.status }: null)" />
           </div>
           <template #footer>
             <div v-if="!doingList?.length" style="color:#999;font-size:12px;padding:8px;">Sin cards</div>
@@ -218,12 +277,10 @@ function clearDue(card: any) {
         <header style="padding:8px 10px;border-bottom:1px solid #eee;font-weight:600;">Done ({{ doneList?.length || 0 }})</header>
         <Draggable v-model="doneList" item-key="id" group="cards" tag="div" @change="onDraggableChange">
           <div v-for="element in doneList" :key="element.id" :data-id="element.id" style="margin:8px;background:#fafafa;border:1px solid #eee;border-radius:6px;padding:8px;">
+            <label style="display:flex;align-items:center;gap:6px;margin-bottom:6px;"><input type="checkbox" :checked="selected.has(element.id)" @change="(e:any)=>toggleSel(element.id, e.target.checked)" /> Seleccionar</label>
             <div style="font-weight:600;">{{ element.title }}</div>
             <div style="font-size:12px;color:#666;">pos {{ element.position }}</div>
-            <div style="display:flex;gap:6px;margin-top:6px;">
-              <button @click="() => promptDue(element)" style="font-size:12px;padding:2px 6px;border:1px solid #ddd;border-radius:4px;background:#fff;">Fecha</button>
-              <button @click="() => clearDue(element)" style="font-size:12px;padding:2px 6px;border:1px solid #ddd;border-radius:4px;background:#fff;">Quitar</button>
-            </div>
+            <CardDueDateChip :card-id="element.id" :project-id="currentProjectId" :current-date="eventsByCard[element.id]?.startUtc" :status="eventsByCard[element.id]?.status" :all-day="eventsByCard[element.id]?.allDay" @updated="(p:any)=> (eventsByCard[element.id]= p.startUtc? { startUtc: p.startUtc, allDay: p.allDay, status: p.status }: null)" />
           </div>
           <template #footer>
             <div v-if="!doneList?.length" style="color:#999;font-size:12px;padding:8px;">Sin cards</div>
@@ -234,18 +291,17 @@ function clearDue(card: any) {
         <header style="padding:8px 10px;border-bottom:1px solid #eee;font-weight:600;">Archived ({{ archivedList?.length || 0 }})</header>
         <Draggable v-model="archivedList" item-key="id" group="cards" tag="div" @change="onDraggableChange">
           <div v-for="element in archivedList" :key="element.id" :data-id="element.id" style="margin:8px;background:#fafafa;border:1px solid #eee;border-radius:6px;padding:8px;">
+            <label style="display:flex;align-items:center;gap:6px;margin-bottom:6px;"><input type="checkbox" :checked="selected.has(element.id)" @change="(e:any)=>toggleSel(element.id, e.target.checked)" /> Seleccionar</label>
             <div style="font-weight:600;">{{ element.title }}</div>
             <div style="font-size:12px;color:#666;">pos {{ element.position }}</div>
-            <div style="display:flex;gap:6px;margin-top:6px;">
-              <button @click="() => promptDue(element)" style="font-size:12px;padding:2px 6px;border:1px solid #ddd;border-radius:4px;background:#fff;">Fecha</button>
-              <button @click="() => clearDue(element)" style="font-size:12px;padding:2px 6px;border:1px solid #ddd;border-radius:4px;background:#fff;">Quitar</button>
-            </div>
+            <CardDueDateChip :card-id="element.id" :project-id="currentProjectId" :current-date="eventsByCard[element.id]?.startUtc" :status="eventsByCard[element.id]?.status" :all-day="eventsByCard[element.id]?.allDay" @updated="(p:any)=> (eventsByCard[element.id]= p.startUtc? { startUtc: p.startUtc, allDay: p.allDay, status: p.status }: null)" />
           </div>
           <template #footer>
             <div v-if="!archivedList?.length" style="color:#999;font-size:12px;padding:8px;">Sin cards</div>
           </template>
         </Draggable>
       </section>
+    </div>
     </div>
   </main>
   </template>
