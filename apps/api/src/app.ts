@@ -6,6 +6,7 @@ import boardsRouter from "./routes/boards.js";
 import projectsRouter from "./modules/projects/routes.js";
 import cardsRouter from "./modules/cards/routes.js";
 import integrationsRouter from "./modules/calendar/routes.js";
+import dashboardRouter from "./modules/dashboard/routes.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL || "info" });
 
@@ -23,6 +24,7 @@ export function createApp() {
   app.use("/projects", projectsRouter);
   app.use("/cards", cardsRouter);
   app.use("/integrations", integrationsRouter);
+  app.use("/dashboard", dashboardRouter);
 
   return app;
 }
