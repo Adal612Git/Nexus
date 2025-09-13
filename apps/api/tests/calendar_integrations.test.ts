@@ -56,13 +56,12 @@ describe("calendar integrations", () => {
       .post("/integrations/calendar/connect")
       .set("Authorization", bearer(userId))
       .send({ provider: "BAD", accountEmail: "user@example.com", defaultCalendarId: "c", timezone: "UTC" });
-    expect(bad1.status).toBe(400);
+    expect(bad1.status).toBe(422);
 
     const bad2 = await request(app)
       .post("/integrations/calendar/connect")
       .set("Authorization", bearer(userId))
       .send({ provider: "GOOGLE", accountEmail: "not-an-email", defaultCalendarId: "c", timezone: "UTC" });
-    expect(bad2.status).toBe(400);
+    expect(bad2.status).toBe(422);
   });
 });
-

@@ -21,11 +21,10 @@ router.get("/calendar", auth, async (req, res) => {
   return res.json({ success: true, data: integ });
 });
 
-router.post("/calendar/connect", auth, async (req, res) => {
+router.post("/calendar/connect", auth, async (req, res, next) => {
   const userId = (req as any).userId as string | undefined;
-  const parsed = connectSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ success: false, error: parsed.error.flatten() });
-  const data = parsed.data;
+  try {
+    const data = connectSchema.parse(req.body);
   try {
     const exists = await prisma.calendarIntegration.findUnique({ where: { userId: userId! } });
     const integ = exists
@@ -40,6 +39,7 @@ router.post("/calendar/connect", auth, async (req, res) => {
     req.log.error({ msg: "calendar.connect.error", user: anonymize(userId) });
     return res.status(400).json({ success: false, error: e?.code || "Connect failed" });
   }
+  } catch (e) { return next(e); }
 });
 
 router.post("/calendar/refresh", auth, async (req, res) => {
@@ -67,7 +67,7 @@ function anonymize(id?: string) {
 export default router;
  
 // List calendar events within a range, optional filters
-router.get("/calendar/events", auth, async (req, res) => {
+router.get("/calendar/events", auth, async (req, res, next) => {
   const userId = (req as any).userId as string | undefined;
   const querySchema = z.object({
     from: z.string().datetime(),
@@ -76,9 +76,8 @@ router.get("/calendar/events", auth, async (req, res) => {
     status: z.enum(["TODO", "DOING", "DONE", "ARCHIVED"]).optional(),
     label: z.string().optional(),
   });
-  const parsed = querySchema.safeParse(req.query);
-  if (!parsed.success) return res.status(400).json({ success: false, error: parsed.error.flatten() });
-  const { from, to, boardId, status } = parsed.data;
+  try {
+    const { from, to, boardId, status } = querySchema.parse(req.query);
   // labels not modeled yet; kept for future
 
   const integ = await prisma.calendarIntegration.findUnique({ where: { userId: userId! } });
@@ -151,4 +150,5 @@ router.get("/calendar/events", auth, async (req, res) => {
 
   req.log.info({ msg: "calendar.events", user: anonymize(userId) });
   return res.json({ success: true, data });
+  } catch (e) { return next(e); }
 });

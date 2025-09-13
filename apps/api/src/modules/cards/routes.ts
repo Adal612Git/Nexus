@@ -197,19 +197,21 @@ const dueDateSchema = z.object({
   allDay: z.boolean().optional(),
 });
 
-router.patch("/:id/due-date", auth, async (req, res) => {
+router.patch("/:id/due-date", auth, async (req, res, next) => {
   const ownerId = (req as any).userId as string | undefined;
-  const pid = idParam.safeParse(req.params);
-  if (!pid.success) return res.status(400).json({ success: false, error: pid.error.flatten() });
-  const body = dueDateSchema.safeParse(req.body);
-  if (!body.success) return res.status(400).json({ success: false, error: body.error.flatten() });
+  let pid;
+  let body;
+  try {
+    pid = idParam.parse(req.params);
+    body = dueDateSchema.parse(req.body);
+  } catch (e) { return next(e); }
 
-  const card = await prisma.card.findUnique({ where: { id: pid.data.id }, include: { project: true } });
+  const card = await prisma.card.findUnique({ where: { id: pid.id }, include: { project: true } });
   if (!card || card.project.userId !== ownerId) return res.status(404).json({ success: false, error: "Not found" });
 
   const integ = await prisma.calendarIntegration.findUnique({ where: { userId: ownerId! } });
   const tz = integ?.timezone || "UTC";
-  const { startUtc, endUtc, allDay } = computeUtcRange(body.data.start, body.data.end, body.data.allDay, tz);
+  const { startUtc, endUtc, allDay } = computeUtcRange(body.start, body.end, body.allDay, tz);
   const idempotencyKey = String(req.headers["x-idempotency-key"] || `dd-${card.id}-${startUtc.toISOString()}`);
 
   try {
